@@ -9,3 +9,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - httproute.yaml
+images:
+  - name: simple-workflows
+    newName: ghcr.io/prafdin/simple-workflows
+    newTag: latest
