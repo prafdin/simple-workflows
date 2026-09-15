@@ -53,3 +53,22 @@ func (r *Runner) Run(ctx context.Context, w domain.Workflow) (string, error) {
 	}
 	return created.Name, nil
 }
+
+func (r *Runner) Status(ctx context.Context, jobName string) (domain.Status, error) {
+	job, err := r.clientset.BatchV1().Jobs(r.namespace).Get(ctx, jobName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	for _, cond := range job.Status.Conditions {
+		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
+			return domain.StatusFailed, nil
+		}
+		if cond.Type == batchv1.JobComplete && cond.Status == corev1.ConditionTrue {
+			return domain.StatusSucceeded, nil
+		}
+	}
+	if job.Status.Active > 0 {
+		return domain.StatusRunning, nil
+	}
+	return domain.StatusPending, nil
+}
