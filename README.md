@@ -63,7 +63,7 @@ cp -r deploy/overlays/sample deploy/overlays/simple-workflows
 ```
 Then, edit files in deploy/overlays/simple-workflows:
 - Specify the correct MongoDB connection parameters in configmap-patch.yaml
-- Specify the gateway reference for publishing the HTTP route in httproute-patch.yaml
+- Specify the gateway reference for publishing the HTTP route in httproute-patch.yaml. If the Gateway lives in a different namespace than the HTTPRoute, set `namespace` on the `parentRefs` entry — the Gateway's own listener must also allow it via `allowedRoutes.namespaces` (e.g. `from: All`), since that setting is controlled by whoever owns the Gateway, not by this HTTPRoute
 
 Finally, apply the manifest to your cluster:
 ```bash

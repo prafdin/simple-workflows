@@ -5,3 +5,4 @@ metadata:
 spec:
   parentRefs:
     - name: my-gateway
+      namespace: gateway-system
