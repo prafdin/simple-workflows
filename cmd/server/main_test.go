@@ -19,3 +19,27 @@ func TestGetenvReturnsEnvValueWhenSet(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, "value")
 	}
 }
+
+func TestBuildClientOptionsHasNoAuthWhenUsernameEmpty(t *testing.T) {
+	opts := buildClientOptions("mongodb://localhost:27017", "", "")
+
+	if opts.Auth != nil {
+		t.Fatalf("got auth %+v, want nil", opts.Auth)
+	}
+}
+
+func TestBuildClientOptionsSetsAuthUsernameWhenUsernameProvided(t *testing.T) {
+	opts := buildClientOptions("mongodb://localhost:27017", "user", "pass")
+
+	if opts.Auth.Username != "user" {
+		t.Fatalf("got username %q, want %q", opts.Auth.Username, "user")
+	}
+}
+
+func TestBuildClientOptionsSetsAuthPasswordWhenUsernameProvided(t *testing.T) {
+	opts := buildClientOptions("mongodb://localhost:27017", "user", "pass")
+
+	if opts.Auth.Password != "pass" {
+		t.Fatalf("got password %q, want %q", opts.Auth.Password, "pass")
+	}
+}

@@ -21,6 +21,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: simple-workflows-config
+            - secretRef:
+                name: simple-workflows-mongo-credentials
           env:
             - name: K8S_NAMESPACE
               valueFrom:

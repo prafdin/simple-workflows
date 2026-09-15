@@ -22,10 +22,12 @@ func main() {
 
 	mongoURI := getenv("MONGO_URI", "mongodb://localhost:27017")
 	mongoDatabase := getenv("MONGO_DATABASE", "simple_workflows")
+	mongoUsername := getenv("MONGO_USERNAME", "")
+	mongoPassword := getenv("MONGO_PASSWORD", "")
 	namespace := getenv("K8S_NAMESPACE", "default")
 	listenAddr := getenv("LISTEN_ADDR", ":8080")
 
-	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	mongoClient, err := mongo.Connect(ctx, buildClientOptions(mongoURI, mongoUsername, mongoPassword))
 	if err != nil {
 		log.Fatalf("could not connect to mongodb: %v", err)
 	}
@@ -48,6 +50,14 @@ func main() {
 	if err := http.ListenAndServe(listenAddr, router); err != nil {
 		log.Fatalf("server stopped: %v", err)
 	}
+}
+
+func buildClientOptions(uri, username, password string) *options.ClientOptions {
+	opts := options.Client().ApplyURI(uri)
+	if username != "" {
+		opts = opts.SetAuth(options.Credential{Username: username, Password: password})
+	}
+	return opts
 }
 
 func buildKubeConfig() (*rest.Config, error) {

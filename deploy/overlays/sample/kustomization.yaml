@@ -4,4 +4,5 @@ resources:
   - ../../base
 patches:
   - path: configmap-patch.yaml
+  - path: secret-patch.yaml
   - path: httproute-patch.yaml
