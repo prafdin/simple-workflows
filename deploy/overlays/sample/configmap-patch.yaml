@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simple-workflows-config
+data:
+  MONGO_URI: "mongodb://mongo.default.svc.cluster.local:27017"
+  MONGO_DATABASE: "simple_workflows"
