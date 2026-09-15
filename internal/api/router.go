@@ -16,5 +16,6 @@ func NewRouter(store domain.WorkflowStore, runner domain.WorkflowRunner) http.Ha
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /workflows", h.submit)
 	mux.HandleFunc("GET /workflows", h.list)
+	mux.HandleFunc("GET /workflows/run", h.run)
 	return mux
 }
