@@ -3,6 +3,7 @@ package k8sexec
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -71,4 +72,18 @@ func (r *Runner) Status(ctx context.Context, jobName string) (domain.Status, err
 		return domain.StatusRunning, nil
 	}
 	return domain.StatusPending, nil
+}
+
+func (r *Runner) Logs(ctx context.Context, jobName string) (io.ReadCloser, error) {
+	pods, err := r.clientset.CoreV1().Pods(r.namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("job-name=%s", jobName),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(pods.Items) == 0 {
+		return nil, domain.ErrNotFound
+	}
+	req := r.clientset.CoreV1().Pods(r.namespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{Container: "task"})
+	return req.Stream(ctx)
 }
