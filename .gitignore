@@ -1,0 +1,5 @@
+# Real deployment overlays created by following README's Installation
+# instructions (cp -r deploy/overlays/sample deploy/overlays/<name>)
+# contain live credentials and must never be committed.
+/deploy/overlays/*/
+!/deploy/overlays/sample/
