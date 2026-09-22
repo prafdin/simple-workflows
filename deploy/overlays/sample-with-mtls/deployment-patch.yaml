@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-workflows
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: build-mongo-client-pem
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - cat /mongo-client-src/tls.crt /mongo-client-src/tls.key > /mongo-client-pem/client.pem
+          volumeMounts:
+            - name: mongo-client-src
+              mountPath: /mongo-client-src
+              readOnly: true
+            - name: mongo-client-pem
+              mountPath: /mongo-client-pem
+      containers:
+        - name: simple-workflows
+          volumeMounts:
+            - name: mongo-ca
+              mountPath: /etc/mongo-ca
+              readOnly: true
+            - name: mongo-client-pem
+              mountPath: /etc/mongo-client-pem
+              readOnly: true
+      volumes:
+        - name: mongo-ca
+          secret:
+            secretName: simple-workflows-mongo-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
+        - name: mongo-client-src
+          secret:
+            secretName: simple-workflows-mongo-client-cert
+        - name: mongo-client-pem
+          emptyDir: {}
