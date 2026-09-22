@@ -2,6 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../base
+  - mongo-ca-secret.yaml
+  - mongo-client-secret.yaml
 patches:
   - path: configmap-patch.yaml
   - path: secret-patch.yaml
