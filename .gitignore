@@ -3,3 +3,4 @@
 # contain live credentials and must never be committed.
 /deploy/overlays/*/
 !/deploy/overlays/sample/
+!/deploy/overlays/sample-with-mtls/

@@ -74,53 +74,6 @@ kubectl apply -k deploy/overlays/simple-workflows
 
 ## Connecting to a mutual-TLS MongoDB (e.g. Percona Server for MongoDB)
 
-If your MongoDB deployment requires clients to present their own certificate (mutual TLS — the default for the [Percona Server for MongoDB operator](https://docs.percona.com/percona-operator-for-mongodb/)), a CA file alone isn't enough: connections fail server-side with `no SSL certificate provided by peer; connection rejected`. You'll need to:
+If your MongoDB deployment requires clients to present their own certificate (mutual TLS — the default for the [Percona Server for MongoDB operator](https://docs.percona.com/percona-operator-for-mongodb/)), a CA file alone isn't enough: connections fail server-side with `no SSL certificate provided by peer; connection rejected`.
 
-1. Copy the CA certificate and the client cert/key pair into the app's namespace — Secret volumes can't cross namespaces — e.g. from PSMDB's `<cluster-name>-ssl` Secret (`ca.crt`, `tls.crt`, `tls.key`).
-2. Since the app's container image is distroless (no shell), add an initContainer that concatenates `tls.crt` + `tls.key` into a single PEM file on a shared `emptyDir`, and mount both that and the CA into the app container. Patch `deployment.yaml`:
-
-```yaml
-spec:
-  template:
-    spec:
-      initContainers:
-        - name: build-mongo-client-pem
-          image: busybox:1.36
-          command:
-            - sh
-            - -c
-            - cat /mongo-client-src/tls.crt /mongo-client-src/tls.key > /mongo-client-pem/client.pem
-          volumeMounts:
-            - name: mongo-client-src
-              mountPath: /mongo-client-src
-              readOnly: true
-            - name: mongo-client-pem
-              mountPath: /mongo-client-pem
-      containers:
-        - name: simple-workflows
-          volumeMounts:
-            - name: mongo-ca
-              mountPath: /etc/mongo-ca
-              readOnly: true
-            - name: mongo-client-pem
-              mountPath: /etc/mongo-client-pem
-              readOnly: true
-      volumes:
-        - name: mongo-ca
-          secret:
-            secretName: mongo-ca-cert
-            items:
-              - key: ca.crt
-                path: ca.crt
-        - name: mongo-client-src
-          secret:
-            secretName: mongo-client-cert
-        - name: mongo-client-pem
-          emptyDir: {}
-```
-
-3. Add `tlsCAFile` and `tlsCertificateKeyFile` to `MONGO_URI` in configmap-patch.yaml, pointing at the mounted paths:
-
-```
-mongodb://<host>:27017/?authSource=admin&tls=true&tlsCAFile=/etc/mongo-ca/ca.crt&tlsCertificateKeyFile=/etc/mongo-client-pem/client.pem
-```
+Start from `deploy/overlays/sample-with-mtls` instead of `deploy/overlays/sample` — it wires an initContainer that builds a client certificate PEM from a Secret (the app's distroless image has no shell to do this itself) and points `MONGO_URI` at it via `tlsCAFile`/`tlsCertificateKeyFile`. Before applying, create the `simple-workflows-mongo-ca` and `simple-workflows-mongo-client-cert` Secrets in your namespace — Secret volumes can't cross namespaces, so copy these from wherever your MongoDB operator generates them (e.g. PSMDB's `<cluster-name>-ssl` Secret holds `ca.crt`, `tls.crt`, `tls.key`).
