@@ -81,6 +81,12 @@ The sample overlays include a ServiceMonitor (`deploy/components/servicemonitor`
 
 A Grafana dashboard ships as a ConfigMap labelled `grafana_dashboard: "1"` (`deploy/components/grafana-dashboard`), picked up by the Grafana dashboard sidecar of kube-prometheus-stack; the JSON can also be imported by hand.
 
+# Tracing
+
+The app exports OpenTelemetry traces over OTLP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (standard `OTEL_*` variables apply; without it tracing is off). Each API request is a trace with its MongoDB and Kubernetes API calls. Each workflow run adds a `workflow.run` span to the trace of the `/workflows/run` request that started it, with stages `schedule`, `start` (image pull, container creation), `execute` and `complete`, back-dated from Job and Pod status when the run finishes.
+
+The `deploy/components/tracing` component points the app at an OpenTelemetry Collector agent on the same node (`http://$(HOST_IP):4317`).
+
 # Installation 
 
 To install the application, first clone this repository and copy the sample overlay directory:
