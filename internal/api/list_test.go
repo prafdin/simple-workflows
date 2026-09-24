@@ -16,7 +16,7 @@ func TestListReturnsAllSubmittedWorkflows(t *testing.T) {
 	if err := store.Save(context.Background(), domain.Workflow{Name: "example", Image: "img:v1"}); err != nil {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows")

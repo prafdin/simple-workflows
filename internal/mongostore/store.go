@@ -73,6 +73,10 @@ func (s *Store) Get(ctx context.Context, name string) (domain.Workflow, error) {
 	return toDomain(doc), nil
 }
 
+func (s *Store) Count(ctx context.Context) (int64, error) {
+	return s.collection.CountDocuments(ctx, bson.M{})
+}
+
 func toDomain(doc document) domain.Workflow {
 	return domain.Workflow{
 		Name:        doc.Name,

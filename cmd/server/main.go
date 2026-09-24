@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/prafdin/simple-workflows/internal/api"
 	"github.com/prafdin/simple-workflows/internal/k8sexec"
+	"github.com/prafdin/simple-workflows/internal/metrics"
 	"github.com/prafdin/simple-workflows/internal/mongostore"
 )
 
@@ -26,6 +28,7 @@ func main() {
 	mongoPassword := getenv("MONGO_PASSWORD", "")
 	namespace := getenv("K8S_NAMESPACE", "default")
 	listenAddr := getenv("LISTEN_ADDR", ":8080")
+	metricsAddr := getenv("METRICS_ADDR", ":9090")
 
 	mongoClient, err := mongo.Connect(ctx, buildClientOptions(mongoURI, mongoUsername, mongoPassword))
 	if err != nil {
@@ -44,7 +47,25 @@ func main() {
 	}
 	runner := k8sexec.New(clientset, namespace)
 
-	router := api.NewRouter(store, runner)
+	telemetry := metrics.New(store)
+	watcher, err := k8sexec.NewWatcher(clientset, namespace, telemetry)
+	if err != nil {
+		log.Fatalf("could not create job watcher: %v", err)
+	}
+	if err := watcher.Run(ctx, 30*time.Second); err != nil {
+		log.Fatalf("could not start job watcher: %v", err)
+	}
+
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", telemetry.Handler())
+	go func() {
+		log.Printf("serving metrics on %s", metricsAddr)
+		if err := http.ListenAndServe(metricsAddr, metricsMux); err != nil {
+			log.Fatalf("metrics server stopped: %v", err)
+		}
+	}()
+
+	router := api.NewRouter(store, runner, telemetry)
 
 	log.Printf("listening on %s", listenAddr)
 	if err := http.ListenAndServe(listenAddr, router); err != nil {

@@ -17,7 +17,7 @@ func TestOutputReturnsRunnerLogsForActiveWorkflow(t *testing.T) {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
 	runner := &fakeRunner{logs: "hello from task"}
-	server := httptest.NewServer(api.NewRouter(store, runner))
+	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/output?name=example")
@@ -38,7 +38,7 @@ func TestOutputReturnsRunnerLogsForActiveWorkflow(t *testing.T) {
 
 func TestOutputFailsWithNotFoundForUnknownWorkflow(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/output?name=missing")

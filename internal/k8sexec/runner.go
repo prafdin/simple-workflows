@@ -14,6 +14,8 @@ import (
 	"github.com/prafdin/simple-workflows/internal/domain"
 )
 
+const workflowLabel = "simple-workflows/workflow"
+
 type Runner struct {
 	clientset kubernetes.Interface
 	namespace string
@@ -30,7 +32,7 @@ func (r *Runner) Run(ctx context.Context, w domain.Workflow) (string, error) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: r.namespace,
-			Labels:    map[string]string{"simple-workflows/workflow": domain.NormalizeName(w.Name)},
+			Labels:    map[string]string{workflowLabel: domain.NormalizeName(w.Name)},
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
@@ -60,13 +62,8 @@ func (r *Runner) Status(ctx context.Context, jobName string) (domain.Status, err
 	if err != nil {
 		return "", err
 	}
-	for _, cond := range job.Status.Conditions {
-		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
-			return domain.StatusFailed, nil
-		}
-		if cond.Type == batchv1.JobComplete && cond.Status == corev1.ConditionTrue {
-			return domain.StatusSucceeded, nil
-		}
+	if status, done := outcome(job); done {
+		return status, nil
 	}
 	if job.Status.Active > 0 {
 		return domain.StatusRunning, nil
@@ -86,4 +83,16 @@ func (r *Runner) Logs(ctx context.Context, jobName string) (io.ReadCloser, error
 	}
 	req := r.clientset.CoreV1().Pods(r.namespace).GetLogs(pods.Items[0].Name, &corev1.PodLogOptions{Container: "task"})
 	return req.Stream(ctx)
+}
+
+func outcome(job *batchv1.Job) (domain.Status, bool) {
+	for _, cond := range job.Status.Conditions {
+		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue {
+			return domain.StatusFailed, true
+		}
+		if cond.Type == batchv1.JobComplete && cond.Status == corev1.ConditionTrue {
+			return domain.StatusSucceeded, true
+		}
+	}
+	return "", false
 }

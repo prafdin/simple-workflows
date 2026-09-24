@@ -16,7 +16,7 @@ func TestRunStartsJobForKnownWorkflow(t *testing.T) {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
 	runner := &fakeRunner{runJob: "example-123"}
-	server := httptest.NewServer(api.NewRouter(store, runner))
+	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/run?name=example")
@@ -32,7 +32,7 @@ func TestRunStartsJobForKnownWorkflow(t *testing.T) {
 
 func TestRunFailsWithNotFoundForUnknownWorkflow(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/run?name=missing")
@@ -52,7 +52,7 @@ func TestRunFailsWithConflictWhenPriorRunActive(t *testing.T) {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
 	runner := &fakeRunner{status: domain.StatusRunning}
-	server := httptest.NewServer(api.NewRouter(store, runner))
+	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/run?name=example")
@@ -63,5 +63,45 @@ func TestRunFailsWithConflictWhenPriorRunActive(t *testing.T) {
 
 	if resp.StatusCode != http.StatusConflict {
 		t.Fatalf("got status %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+}
+
+func TestRunCountsStartedRun(t *testing.T) {
+	store := newFakeStore()
+	if err := store.Save(context.Background(), domain.Workflow{Name: "kepler", Image: "img:v9"}); err != nil {
+		t.Fatalf("could not seed workflow: %v", err)
+	}
+	telemetry := &fakeMetrics{}
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{runJob: "kepler-981"}, telemetry))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/workflows/run?name=kepler")
+	if err != nil {
+		t.Fatalf("could not call run endpoint: %v", err)
+	}
+	resp.Body.Close()
+
+	if telemetry.started != 1 {
+		t.Fatalf("got %d started runs counted, want 1", telemetry.started)
+	}
+}
+
+func TestRunDoesNotCountRunInProgress(t *testing.T) {
+	store := newFakeStore()
+	if err := store.Save(context.Background(), domain.Workflow{Name: "kepler", Image: "img:v9", JobName: "kepler-1"}); err != nil {
+		t.Fatalf("could not seed workflow: %v", err)
+	}
+	telemetry := &fakeMetrics{}
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{status: domain.StatusRunning}, telemetry))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/workflows/run?name=kepler")
+	if err != nil {
+		t.Fatalf("could not call run endpoint: %v", err)
+	}
+	resp.Body.Close()
+
+	if telemetry.started != 0 {
+		t.Fatalf("got %d started runs counted for conflicting run, want 0", telemetry.started)
 	}
 }

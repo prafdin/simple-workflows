@@ -5,3 +5,4 @@ metadata:
 data:
   MONGO_URI: "mongodb://localhost:27017"
   MONGO_DATABASE: "simple_workflows"
+  METRICS_ADDR: ":9090"

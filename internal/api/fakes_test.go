@@ -45,6 +45,12 @@ func (s *fakeStore) Get(_ context.Context, name string) (domain.Workflow, error)
 	return w, nil
 }
 
+func (s *fakeStore) Count(_ context.Context) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return int64(len(s.workflows)), nil
+}
+
 type fakeRunner struct {
 	runErr    error
 	runJob    string
@@ -71,3 +77,23 @@ func (r *fakeRunner) Logs(_ context.Context, _ string) (io.ReadCloser, error) {
 	}
 	return io.NopCloser(strings.NewReader(r.logs)), nil
 }
+
+type fakeMetrics struct {
+	mu      sync.Mutex
+	created int
+	started int
+}
+
+func (m *fakeMetrics) WorkflowCreated() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.created++
+}
+
+func (m *fakeMetrics) RunStarted() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.started++
+}
+
+func (m *fakeMetrics) RunCompleted(_ domain.Status) {}
