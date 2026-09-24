@@ -20,3 +20,12 @@ func (s stubStore) Get(_ context.Context, _ string) (domain.Workflow, error) {
 }
 
 func (s stubStore) Count(_ context.Context) (int64, error) { return s.count, s.err }
+
+type stuckStore struct {
+	stubStore
+}
+
+func (s stuckStore) Count(ctx context.Context) (int64, error) {
+	<-ctx.Done()
+	return 0, ctx.Err()
+}

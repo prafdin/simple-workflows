@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
@@ -122,5 +123,28 @@ simple_workflows_runs_started_total 1
 
 	if err != nil {
 		t.Fatalf("scrape with failing store does not serve counters alone: %v", err)
+	}
+}
+
+func TestScrapeDoesNotWaitForStuckStoreBeyondTimeout(t *testing.T) {
+	silence(t)
+	telemetry := metrics.New(stuckStore{})
+	done := make(chan error, 1)
+	go func() {
+		done <- scrape(t, telemetry, `
+# HELP simple_workflows_runs_started_total Workflow runs started by GET /workflows/run.
+# TYPE simple_workflows_runs_started_total counter
+simple_workflows_runs_started_total 0
+`, "simple_workflows_runs_started_total", "simple_workflows_workflows")
+	}()
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(7 * time.Second):
+		err = errors.New("scrape did not return within 7s")
+	}
+
+	if err != nil {
+		t.Fatalf("scrape with stuck store does not return counters in time: %v", err)
 	}
 }
