@@ -77,3 +77,23 @@ func (r *fakeRunner) Logs(_ context.Context, _ string) (io.ReadCloser, error) {
 	}
 	return io.NopCloser(strings.NewReader(r.logs)), nil
 }
+
+type fakeMetrics struct {
+	mu      sync.Mutex
+	created int
+	started int
+}
+
+func (m *fakeMetrics) WorkflowCreated() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.created++
+}
+
+func (m *fakeMetrics) RunStarted() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.started++
+}
+
+func (m *fakeMetrics) RunCompleted(_ domain.Status) {}

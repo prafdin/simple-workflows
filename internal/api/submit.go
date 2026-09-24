@@ -45,5 +45,6 @@ func (h *handler) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.metrics.WorkflowCreated()
 	w.WriteHeader(http.StatusCreated)
 }

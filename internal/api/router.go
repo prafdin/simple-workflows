@@ -7,12 +7,13 @@ import (
 )
 
 type handler struct {
-	store  domain.WorkflowStore
-	runner domain.WorkflowRunner
+	store   domain.WorkflowStore
+	runner  domain.WorkflowRunner
+	metrics domain.Metrics
 }
 
-func NewRouter(store domain.WorkflowStore, runner domain.WorkflowRunner) http.Handler {
-	h := &handler{store: store, runner: runner}
+func NewRouter(store domain.WorkflowStore, runner domain.WorkflowRunner, metrics domain.Metrics) http.Handler {
+	h := &handler{store: store, runner: runner, metrics: metrics}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /workflows", h.submit)
 	mux.HandleFunc("GET /workflows", h.list)

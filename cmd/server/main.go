@@ -14,6 +14,7 @@ import (
 
 	"github.com/prafdin/simple-workflows/internal/api"
 	"github.com/prafdin/simple-workflows/internal/k8sexec"
+	"github.com/prafdin/simple-workflows/internal/metrics"
 	"github.com/prafdin/simple-workflows/internal/mongostore"
 )
 
@@ -44,7 +45,8 @@ func main() {
 	}
 	runner := k8sexec.New(clientset, namespace)
 
-	router := api.NewRouter(store, runner)
+	telemetry := metrics.New(store)
+	router := api.NewRouter(store, runner, telemetry)
 
 	log.Printf("listening on %s", listenAddr)
 	if err := http.ListenAndServe(listenAddr, router); err != nil {

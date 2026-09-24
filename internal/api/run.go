@@ -47,5 +47,6 @@ func (h *handler) run(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.metrics.RunStarted()
 	w.WriteHeader(http.StatusAccepted)
 }

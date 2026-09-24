@@ -35,7 +35,7 @@ func postWorkflowYAML(t *testing.T, serverURL, yamlBody string) *http.Response {
 
 func TestSubmitStoresValidWorkflow(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
 	defer server.Close()
 
 	resp := postWorkflowYAML(t, server.URL, "name: example\nimage: docker.io/prafdin/example:v1\n")
@@ -48,7 +48,7 @@ func TestSubmitStoresValidWorkflow(t *testing.T) {
 
 func TestSubmitFailsWithBadRequestWhenNameMissing(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
 	defer server.Close()
 
 	resp := postWorkflowYAML(t, server.URL, "image: docker.io/prafdin/example:v1\n")
@@ -61,7 +61,7 @@ func TestSubmitFailsWithBadRequestWhenNameMissing(t *testing.T) {
 
 func TestSubmitPersistsWorkflowRetrievableByStore(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
 	defer server.Close()
 
 	resp := postWorkflowYAML(t, server.URL, "name: example\nimage: docker.io/prafdin/example:v1\n")
@@ -74,5 +74,31 @@ func TestSubmitPersistsWorkflowRetrievableByStore(t *testing.T) {
 
 	if got.Image != "docker.io/prafdin/example:v1" {
 		t.Fatalf("got image %q, want %q", got.Image, "docker.io/prafdin/example:v1")
+	}
+}
+
+func TestSubmitCountsCreatedWorkflow(t *testing.T) {
+	telemetry := &fakeMetrics{}
+	server := httptest.NewServer(api.NewRouter(newFakeStore(), &fakeRunner{}, telemetry))
+	defer server.Close()
+
+	resp := postWorkflowYAML(t, server.URL, "name: orbit-7\nimage: registry.local/orbit:3.1\n")
+	resp.Body.Close()
+
+	if telemetry.created != 1 {
+		t.Fatalf("got %d created workflows counted, want 1", telemetry.created)
+	}
+}
+
+func TestSubmitDoesNotCountRejectedWorkflow(t *testing.T) {
+	telemetry := &fakeMetrics{}
+	server := httptest.NewServer(api.NewRouter(newFakeStore(), &fakeRunner{}, telemetry))
+	defer server.Close()
+
+	resp := postWorkflowYAML(t, server.URL, "image: registry.local/orbit:3.1\n")
+	resp.Body.Close()
+
+	if telemetry.created != 0 {
+		t.Fatalf("got %d created workflows counted for rejected manifest, want 0", telemetry.created)
 	}
 }
