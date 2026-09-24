@@ -3,13 +3,17 @@ package k8sexec
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/prafdin/simple-workflows/internal/domain"
 )
@@ -21,7 +25,7 @@ type Watcher struct {
 	informer cache.SharedIndexInformer
 }
 
-func NewWatcher(clientset kubernetes.Interface, namespace string, metrics domain.Metrics) (*Watcher, error) {
+func NewWatcher(clientset kubernetes.Interface, namespace string, metrics domain.Metrics, provider trace.TracerProvider) (*Watcher, error) {
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		clientset,
 		0,
@@ -29,16 +33,23 @@ func NewWatcher(clientset kubernetes.Interface, namespace string, metrics domain
 		informers.WithTweakListOptions(func(o *metav1.ListOptions) { o.LabelSelector = workflowLabel }),
 	)
 	informer := factory.Batch().V1().Jobs().Informer()
+	history := chronicle{tracer: provider.Tracer("github.com/prafdin/simple-workflows/internal/k8sexec")}
+	complete := func(job *batchv1.Job, status domain.Status) {
+		metrics.RunCompleted(status)
+		history.record(job, podOf(clientset, job), status)
+	}
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerDetailedFuncs{
 		AddFunc: func(obj interface{}, initial bool) {
-			if status, done := outcome(obj.(*batchv1.Job)); done && !initial {
-				metrics.RunCompleted(status)
+			job := obj.(*batchv1.Job)
+			if status, done := outcome(job); done && !initial {
+				complete(job, status)
 			}
 		},
 		UpdateFunc: func(previous, current interface{}) {
 			_, was := outcome(previous.(*batchv1.Job))
-			if status, done := outcome(current.(*batchv1.Job)); done && !was {
-				metrics.RunCompleted(status)
+			job := current.(*batchv1.Job)
+			if status, done := outcome(job); done && !was {
+				complete(job, status)
 			}
 		},
 	})
@@ -56,4 +67,18 @@ func (w *Watcher) Run(ctx context.Context, timeout time.Duration) error {
 		return errors.New("job informer cache did not sync in time")
 	}
 	return nil
+}
+
+func podOf(clientset kubernetes.Interface, job *batchv1.Job) *corev1.Pod {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	pods, err := clientset.CoreV1().Pods(job.Namespace).List(ctx, metav1.ListOptions{LabelSelector: "job-name=" + job.Name})
+	if err != nil {
+		log.Printf("could not list pods of job %s for tracing: %v", job.Name, err)
+		return nil
+	}
+	if len(pods.Items) == 0 {
+		return nil
+	}
+	return &pods.Items[0]
 }

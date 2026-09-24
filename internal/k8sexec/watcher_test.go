@@ -10,6 +10,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/prafdin/simple-workflows/internal/domain"
 	"github.com/prafdin/simple-workflows/internal/k8sexec"
 )
@@ -44,7 +46,7 @@ func condition(kind batchv1.JobConditionType) batchv1.JobCondition {
 func watch(t *testing.T, clientset *fake.Clientset) recorder {
 	t.Helper()
 	rec := recorder{outcome: make(chan domain.Status, 8)}
-	watcher, err := k8sexec.NewWatcher(clientset, "lab", rec)
+	watcher, err := k8sexec.NewWatcher(clientset, "lab", rec, noop.NewTracerProvider())
 	if err != nil {
 		t.Fatalf("could not create watcher: %v", err)
 	}
