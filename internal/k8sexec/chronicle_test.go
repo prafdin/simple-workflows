@@ -169,3 +169,56 @@ func TestWatcherStartsRootRunForJobWithoutTraceparent(t *testing.T) {
 		t.Fatalf("run without traceparent has a parent, want a root span")
 	}
 }
+
+func skewedRun(t *testing.T, name string) map[string]sdktrace.ReadOnlySpan {
+	t.Helper()
+	clientset := fake.NewSimpleClientset()
+	seed(t, clientset, tracedJob(name, parent, ""))
+	if _, err := clientset.CoreV1().Pods("lab").Create(context.Background(), taskPod(name, 0), metav1.CreateOptions{}); err != nil {
+		t.Fatalf("could not create pod: %v", err)
+	}
+	recorder := traced(t, clientset)
+	done := tracedJob(name, parent, batchv1.JobComplete)
+	done.Status.Conditions[0].LastTransitionTime = moment(16)
+	finish(t, clientset, done)
+	return spans(t, recorder)
+}
+
+func TestWatcherNeverEndsStageBeforeItStarts(t *testing.T) {
+	complete := skewedRun(t, "pulsar-18")["complete"]
+
+	if complete.EndTime().Before(complete.StartTime()) {
+		t.Fatalf("complete stage ends at %s before it starts at %s", complete.EndTime(), complete.StartTime())
+	}
+}
+
+func TestWatcherKeepsStagesInsideRun(t *testing.T) {
+	named := skewedRun(t, "pulsar-19")
+	run := named["workflow.run"]
+
+	for name, span := range named {
+		if span.EndTime().After(run.EndTime()) {
+			t.Fatalf("stage %q ends at %s after run ends at %s", name, span.EndTime(), run.EndTime())
+		}
+	}
+}
+
+func TestWatcherSkipsPodLookupWhenRunIsNotTraced(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	seed(t, clientset, workflowJob("pulsar-20"))
+	rec := watch(t, clientset)
+	finish(t, clientset, workflowJob("pulsar-20", condition(batchv1.JobComplete)))
+	first(t, rec)
+	seed(t, clientset, workflowJob("pulsar-21", condition(batchv1.JobFailed)))
+	first(t, rec)
+	lookups := 0
+	for _, action := range clientset.Actions() {
+		if action.GetVerb() == "list" && action.GetResource().Resource == "pods" {
+			lookups++
+		}
+	}
+
+	if lookups != 0 {
+		t.Fatalf("got %d pod lookups with a no-op tracer, want 0", lookups)
+	}
+}

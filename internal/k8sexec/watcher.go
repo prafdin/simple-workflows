@@ -36,7 +36,7 @@ func NewWatcher(clientset kubernetes.Interface, namespace string, metrics domain
 	history := chronicle{tracer: provider.Tracer("github.com/prafdin/simple-workflows/internal/k8sexec")}
 	complete := func(job *batchv1.Job, status domain.Status) {
 		metrics.RunCompleted(status)
-		history.record(job, podOf(clientset, job), status)
+		history.record(job, status, func() *corev1.Pod { return podOf(clientset, job) })
 	}
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerDetailedFuncs{
 		AddFunc: func(obj interface{}, initial bool) {

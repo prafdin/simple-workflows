@@ -20,7 +20,7 @@ type chronicle struct {
 	tracer trace.Tracer
 }
 
-func (c chronicle) record(job *batchv1.Job, pod *corev1.Pod, status domain.Status) {
+func (c chronicle) record(job *batchv1.Job, status domain.Status, lookup func() *corev1.Pod) {
 	carrier := propagation.MapCarrier{}
 	for _, key := range (propagation.TraceContext{}).Fields() {
 		if value, ok := job.Annotations[annotationPrefix+key]; ok {
@@ -40,8 +40,10 @@ func (c chronicle) record(job *batchv1.Job, pod *corev1.Pod, status domain.Statu
 		),
 	)
 	finished := ending(job)
-	if pod != nil {
-		c.stages(ctx, job, pod, finished)
+	if run.IsRecording() {
+		if pod := lookup(); pod != nil {
+			finished = c.stages(ctx, job, pod, finished)
+		}
 	}
 	if status == domain.StatusFailed {
 		run.SetStatus(codes.Error, "workflow run failed")
@@ -49,30 +51,39 @@ func (c chronicle) record(job *batchv1.Job, pod *corev1.Pod, status domain.Statu
 	run.End(trace.WithTimestamp(finished))
 }
 
-func (c chronicle) stages(ctx context.Context, job *batchv1.Job, pod *corev1.Pod, finished time.Time) {
+func (c chronicle) stages(ctx context.Context, job *batchv1.Job, pod *corev1.Pod, finished time.Time) time.Time {
 	scheduled := scheduling(pod)
-	c.stage(ctx, "schedule", job.CreationTimestamp.Time, scheduled)
+	latest := later(finished, c.stage(ctx, "schedule", job.CreationTimestamp.Time, scheduled))
 	state := termination(pod)
 	if state == nil {
-		return
+		return latest
 	}
-	c.stage(ctx, "start", scheduled, state.StartedAt.Time)
-	c.stage(ctx, "execute", state.StartedAt.Time, state.FinishedAt.Time,
+	latest = later(latest, c.stage(ctx, "start", scheduled, state.StartedAt.Time))
+	latest = later(latest, c.stage(ctx, "execute", state.StartedAt.Time, state.FinishedAt.Time,
 		attribute.Int("container.exit_code", int(state.ExitCode)),
 		attribute.String("container.reason", state.Reason),
-	)
-	c.stage(ctx, "complete", state.FinishedAt.Time, finished)
+	))
+	return later(latest, c.stage(ctx, "complete", state.FinishedAt.Time, finished))
 }
 
-func (c chronicle) stage(ctx context.Context, name string, from, to time.Time, attrs ...attribute.KeyValue) {
+func (c chronicle) stage(ctx context.Context, name string, from, to time.Time, attrs ...attribute.KeyValue) time.Time {
 	if from.IsZero() || to.IsZero() {
-		return
+		return time.Time{}
 	}
+	to = later(to, from)
 	_, span := c.tracer.Start(ctx, name, trace.WithTimestamp(from), trace.WithAttributes(attrs...))
 	if name == "execute" && failed(attrs) {
 		span.SetStatus(codes.Error, "task container exited with non-zero code")
 	}
 	span.End(trace.WithTimestamp(to))
+	return to
+}
+
+func later(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
 }
 
 func failed(attrs []attribute.KeyValue) bool {
