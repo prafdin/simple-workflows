@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+  - name: simple-workflows-grafana-dashboard
+    files:
+      - simple-workflows.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
