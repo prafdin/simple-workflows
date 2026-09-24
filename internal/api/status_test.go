@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/prafdin/simple-workflows/internal/api"
 	"github.com/prafdin/simple-workflows/internal/domain"
 )
@@ -17,7 +19,7 @@ func TestStatusReturnsRunnerStatusForActiveWorkflow(t *testing.T) {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
 	runner := &fakeRunner{status: domain.StatusRunning}
-	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/status?name=example")
@@ -40,7 +42,7 @@ func TestStatusReturnsRunnerStatusForActiveWorkflow(t *testing.T) {
 
 func TestStatusFailsWithNotFoundForUnknownWorkflow(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/status?name=missing")
@@ -59,7 +61,7 @@ func TestStatusFailsWithNotFoundForWorkflowNeverRun(t *testing.T) {
 	if err := store.Save(context.Background(), domain.Workflow{Name: "example", Image: "img:v1"}); err != nil {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/status?name=example")

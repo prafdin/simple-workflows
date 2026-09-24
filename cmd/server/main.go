@@ -9,6 +9,10 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -17,10 +21,17 @@ import (
 	"github.com/prafdin/simple-workflows/internal/k8sexec"
 	"github.com/prafdin/simple-workflows/internal/metrics"
 	"github.com/prafdin/simple-workflows/internal/mongostore"
+	"github.com/prafdin/simple-workflows/internal/tracing"
 )
 
 func main() {
 	ctx := context.Background()
+
+	provider, shutdown, err := tracing.Setup(ctx)
+	if err != nil {
+		log.Fatalf("could not set up tracing: %v", err)
+	}
+	defer shutdown(context.Background())
 
 	mongoURI := getenv("MONGO_URI", "mongodb://localhost:27017")
 	mongoDatabase := getenv("MONGO_DATABASE", "simple_workflows")
@@ -30,7 +41,7 @@ func main() {
 	listenAddr := getenv("LISTEN_ADDR", ":8080")
 	metricsAddr := getenv("METRICS_ADDR", ":9090")
 
-	mongoClient, err := mongo.Connect(ctx, buildClientOptions(mongoURI, mongoUsername, mongoPassword))
+	mongoClient, err := mongo.Connect(ctx, buildClientOptions(mongoURI, mongoUsername, mongoPassword, provider))
 	if err != nil {
 		log.Fatalf("could not connect to mongodb: %v", err)
 	}
@@ -41,6 +52,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not build kubernetes config: %v", err)
 	}
+	k8sConfig.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+		return otelhttp.NewTransport(rt, otelhttp.WithTracerProvider(provider), otelhttp.WithPropagators(propagation.TraceContext{}))
+	})
 	clientset, err := kubernetes.NewForConfig(k8sConfig)
 	if err != nil {
 		log.Fatalf("could not build kubernetes clientset: %v", err)
@@ -48,7 +62,7 @@ func main() {
 	runner := k8sexec.New(clientset, namespace)
 
 	telemetry := metrics.New(store)
-	watcher, err := k8sexec.NewWatcher(clientset, namespace, telemetry)
+	watcher, err := k8sexec.NewWatcher(clientset, namespace, telemetry, provider)
 	if err != nil {
 		log.Fatalf("could not create job watcher: %v", err)
 	}
@@ -65,7 +79,7 @@ func main() {
 		}
 	}()
 
-	router := api.NewRouter(store, runner, telemetry)
+	router := api.NewRouter(store, runner, telemetry, provider)
 
 	log.Printf("listening on %s", listenAddr)
 	if err := http.ListenAndServe(listenAddr, router); err != nil {
@@ -73,8 +87,8 @@ func main() {
 	}
 }
 
-func buildClientOptions(uri, username, password string) *options.ClientOptions {
-	opts := options.Client().ApplyURI(uri)
+func buildClientOptions(uri, username, password string, provider trace.TracerProvider) *options.ClientOptions {
+	opts := options.Client().ApplyURI(uri).SetMonitor(otelmongo.NewMonitor(otelmongo.WithTracerProvider(provider)))
 	if username != "" {
 		opts = opts.SetAuth(options.Credential{Username: username, Password: password})
 	}
