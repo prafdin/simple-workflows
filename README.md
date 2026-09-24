@@ -41,6 +41,11 @@ curl -X GET \
 ```
 Workflows names are case-insensitive for this endpoint.
 
+A ready-to-run example lives in [examples/hello](examples/hello): its task prints where the pod runs (namespace, CPU and memory limits, kernel) and exits after a short pause. The image is published to `ghcr.io/prafdin/simple-workflows-example` by the [Example image](.github/workflows/example-publish.yml) workflow on `example-v*` tags.
+```bash
+curl -X POST -F "file=@examples/hello/workflow.yaml" http://localhost:8080/workflows
+```
+
 To check workflow status:
 ```bash
 curl -X GET \

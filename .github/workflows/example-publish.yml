@@ -1,0 +1,49 @@
+name: Example image
+
+on:
+  push:
+    tags:
+      - "example-v*"
+  pull_request:
+    paths:
+      - "examples/**"
+      - ".github/workflows/example-publish.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-example
+          flavor: |
+            latest=false
+          tags: |
+            type=match,pattern=example-v(.*),group=1
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: examples/hello
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ github.event_name == 'push' && steps.meta.outputs.tags || 'simple-workflows-example:pr-check' }}
+          labels: ${{ steps.meta.outputs.labels }}
