@@ -11,10 +11,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"go.opentelemetry.io/otel/propagation"
+
 	"github.com/prafdin/simple-workflows/internal/domain"
 )
 
-const workflowLabel = "simple-workflows/workflow"
+const (
+	workflowLabel    = "simple-workflows/workflow"
+	annotationPrefix = "simple-workflows/"
+)
 
 type Runner struct {
 	clientset kubernetes.Interface
@@ -27,12 +32,19 @@ func New(clientset kubernetes.Interface, namespace string) *Runner {
 
 func (r *Runner) Run(ctx context.Context, w domain.Workflow) (string, error) {
 	jobName := fmt.Sprintf("%s-%d", domain.NormalizeName(w.Name), time.Now().UnixNano())
+	carrier := propagation.MapCarrier{}
+	propagation.TraceContext{}.Inject(ctx, carrier)
+	annotations := map[string]string{}
+	for key, value := range carrier {
+		annotations[annotationPrefix+key] = value
+	}
 	backoffLimit := int32(0)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: r.namespace,
-			Labels:    map[string]string{workflowLabel: domain.NormalizeName(w.Name)},
+			Name:        jobName,
+			Namespace:   r.namespace,
+			Labels:      map[string]string{workflowLabel: domain.NormalizeName(w.Name)},
+			Annotations: annotations,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
