@@ -60,6 +60,25 @@ curl -X GET \
   http://localhost:8080/workflows/output
 ```
 
+# Metrics
+
+Prometheus metrics are served on `METRICS_ADDR` (default `:9090`) at `/metrics`, separate from the public API:
+
+| Metric | Type | Meaning |
+|---|---|---|
+| `simple_workflows_workflows_created_total` | counter | manifests accepted by `POST /workflows` |
+| `simple_workflows_runs_started_total` | counter | runs started by `/workflows/run` |
+| `simple_workflows_runs_completed_total{status}` | counter | runs finished, `status` is `succeeded` or `failed` |
+| `simple_workflows_workflows` | gauge | workflows stored right now |
+
+Counters reset when the pod restarts; query them with `increase()` or `rate()`:
+```promql
+sum(increase(simple_workflows_runs_completed_total[1h]))
+increase(simple_workflows_runs_completed_total{status="failed"}[1d])
+```
+
+The sample overlays include a ServiceMonitor (`deploy/components/servicemonitor`) labelled `release: kube-prometheus-stack`; adjust the label to your Prometheus `serviceMonitorSelector`, or drop the component if prometheus-operator is not installed.
+
 # Installation 
 
 To install the application, first clone this repository and copy the sample overlay directory:
@@ -71,6 +90,7 @@ Then, edit files in deploy/overlays/simple-workflows:
 - Specify the MongoDB credentials in secret-patch.yaml
 - Specify the gateway reference for publishing the HTTP route in httproute-patch.yaml. If the Gateway lives in a different namespace than the HTTPRoute, set `namespace` on the `parentRefs` entry — the Gateway's own listener must also allow it via `allowedRoutes.namespaces` (e.g. `from: All`), since that setting is controlled by whoever owns the Gateway, not by this HTTPRoute
 - Set the image tag to deploy under `images` in kustomization.yaml (`newTag`), matching a version published by the [Docker](.github/workflows/docker-publish.yml) workflow to `ghcr.io/prafdin/simple-workflows`
+- Adjust or remove the ServiceMonitor component in kustomization.yaml depending on your Prometheus setup
 
 Finally, apply the manifest to your cluster:
 ```bash

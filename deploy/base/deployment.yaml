@@ -17,7 +17,10 @@ spec:
         - name: simple-workflows
           image: simple-workflows:latest
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9090
           envFrom:
             - configMapRef:
                 name: simple-workflows-config
