@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/prafdin/simple-workflows/internal/api"
 	"github.com/prafdin/simple-workflows/internal/domain"
 )
@@ -16,7 +18,7 @@ func TestListReturnsAllSubmittedWorkflows(t *testing.T) {
 	if err := store.Save(context.Background(), domain.Workflow{Name: "example", Image: "img:v1"}); err != nil {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows")

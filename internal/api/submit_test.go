@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/prafdin/simple-workflows/internal/api"
 )
 
@@ -35,7 +37,7 @@ func postWorkflowYAML(t *testing.T, serverURL, yamlBody string) *http.Response {
 
 func TestSubmitStoresValidWorkflow(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp := postWorkflowYAML(t, server.URL, "name: example\nimage: docker.io/prafdin/example:v1\n")
@@ -48,7 +50,7 @@ func TestSubmitStoresValidWorkflow(t *testing.T) {
 
 func TestSubmitFailsWithBadRequestWhenNameMissing(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp := postWorkflowYAML(t, server.URL, "image: docker.io/prafdin/example:v1\n")
@@ -61,7 +63,7 @@ func TestSubmitFailsWithBadRequestWhenNameMissing(t *testing.T) {
 
 func TestSubmitPersistsWorkflowRetrievableByStore(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp := postWorkflowYAML(t, server.URL, "name: example\nimage: docker.io/prafdin/example:v1\n")
@@ -79,7 +81,7 @@ func TestSubmitPersistsWorkflowRetrievableByStore(t *testing.T) {
 
 func TestSubmitCountsCreatedWorkflow(t *testing.T) {
 	telemetry := &fakeMetrics{}
-	server := httptest.NewServer(api.NewRouter(newFakeStore(), &fakeRunner{}, telemetry))
+	server := httptest.NewServer(api.NewRouter(newFakeStore(), &fakeRunner{}, telemetry, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp := postWorkflowYAML(t, server.URL, "name: orbit-7\nimage: registry.local/orbit:3.1\n")
@@ -92,7 +94,7 @@ func TestSubmitCountsCreatedWorkflow(t *testing.T) {
 
 func TestSubmitDoesNotCountRejectedWorkflow(t *testing.T) {
 	telemetry := &fakeMetrics{}
-	server := httptest.NewServer(api.NewRouter(newFakeStore(), &fakeRunner{}, telemetry))
+	server := httptest.NewServer(api.NewRouter(newFakeStore(), &fakeRunner{}, telemetry, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp := postWorkflowYAML(t, server.URL, "image: registry.local/orbit:3.1\n")

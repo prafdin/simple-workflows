@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel/trace/noop"
+
 	"github.com/prafdin/simple-workflows/internal/api"
 	"github.com/prafdin/simple-workflows/internal/domain"
 )
@@ -16,7 +18,7 @@ func TestRunStartsJobForKnownWorkflow(t *testing.T) {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
 	runner := &fakeRunner{runJob: "example-123"}
-	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/run?name=example")
@@ -32,7 +34,7 @@ func TestRunStartsJobForKnownWorkflow(t *testing.T) {
 
 func TestRunFailsWithNotFoundForUnknownWorkflow(t *testing.T) {
 	store := newFakeStore()
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{}, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/run?name=missing")
@@ -52,7 +54,7 @@ func TestRunFailsWithConflictWhenPriorRunActive(t *testing.T) {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
 	runner := &fakeRunner{status: domain.StatusRunning}
-	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}))
+	server := httptest.NewServer(api.NewRouter(store, runner, &fakeMetrics{}, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/run?name=example")
@@ -72,7 +74,7 @@ func TestRunCountsStartedRun(t *testing.T) {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
 	telemetry := &fakeMetrics{}
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{runJob: "kepler-981"}, telemetry))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{runJob: "kepler-981"}, telemetry, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/run?name=kepler")
@@ -92,7 +94,7 @@ func TestRunDoesNotCountRunInProgress(t *testing.T) {
 		t.Fatalf("could not seed workflow: %v", err)
 	}
 	telemetry := &fakeMetrics{}
-	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{status: domain.StatusRunning}, telemetry))
+	server := httptest.NewServer(api.NewRouter(store, &fakeRunner{status: domain.StatusRunning}, telemetry, noop.NewTracerProvider()))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/workflows/run?name=kepler")
