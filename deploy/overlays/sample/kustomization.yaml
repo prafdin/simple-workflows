@@ -4,6 +4,7 @@ resources:
   - ../../base
 components:
   - ../../components/servicemonitor
+  - ../../components/grafana-dashboard
 patches:
   - path: configmap-patch.yaml
   - path: secret-patch.yaml

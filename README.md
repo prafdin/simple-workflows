@@ -79,6 +79,8 @@ increase(simple_workflows_runs_completed_total{status="failed"}[1d])
 
 The sample overlays include a ServiceMonitor (`deploy/components/servicemonitor`) labelled `release: kube-prometheus-stack`; adjust the label to your Prometheus `serviceMonitorSelector`, or drop the component if prometheus-operator is not installed.
 
+A Grafana dashboard ships as a ConfigMap labelled `grafana_dashboard: "1"` (`deploy/components/grafana-dashboard`), picked up by the Grafana dashboard sidecar of kube-prometheus-stack; the JSON can also be imported by hand.
+
 # Installation 
 
 To install the application, first clone this repository and copy the sample overlay directory:
