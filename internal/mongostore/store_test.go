@@ -132,3 +132,41 @@ func TestGetOfUnknownNameFailsWithNotFound(t *testing.T) {
 		t.Fatalf("got error %v, want domain.ErrNotFound", err)
 	}
 }
+
+func TestCountReturnsNumberOfSavedWorkflows(t *testing.T) {
+	store := mongostore.New(newTestCollection(t))
+	ctx := context.Background()
+	for _, name := range []string{"alpha", "beta", "gamma"} {
+		if err := store.Save(ctx, domain.Workflow{Name: name, Image: "example:v1"}); err != nil {
+			t.Fatalf("could not save workflow %q: %v", name, err)
+		}
+	}
+
+	got, err := store.Count(ctx)
+	if err != nil {
+		t.Fatalf("could not count workflows: %v", err)
+	}
+
+	if got != 3 {
+		t.Fatalf("got count %d, want 3", got)
+	}
+}
+
+func TestCountDoesNotGrowOnUpsert(t *testing.T) {
+	store := mongostore.New(newTestCollection(t))
+	ctx := context.Background()
+	for _, name := range []string{"Twin", "twin"} {
+		if err := store.Save(ctx, domain.Workflow{Name: name, Image: "example:v1"}); err != nil {
+			t.Fatalf("could not save workflow %q: %v", name, err)
+		}
+	}
+
+	got, err := store.Count(ctx)
+	if err != nil {
+		t.Fatalf("could not count workflows: %v", err)
+	}
+
+	if got != 1 {
+		t.Fatalf("got count %d, want 1 after upsert", got)
+	}
+}

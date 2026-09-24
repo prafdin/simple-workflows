@@ -45,6 +45,12 @@ func (s *fakeStore) Get(_ context.Context, name string) (domain.Workflow, error)
 	return w, nil
 }
 
+func (s *fakeStore) Count(_ context.Context) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return int64(len(s.workflows)), nil
+}
+
 type fakeRunner struct {
 	runErr    error
 	runJob    string
